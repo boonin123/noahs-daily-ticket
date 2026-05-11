@@ -37,7 +37,7 @@ A personal experiment in replacing a fragmented morning routine (weather app, in
                   │
                   ▼
             ┌────────────┐
-            │  render.py │  Pillow → PNG
+            │  render.py │  Pillow → PDF
             └─────┬──────┘
                   ▼
       ~/Desktop/daily-ticket.pdf
