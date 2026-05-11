@@ -1,46 +1,66 @@
-"""Render the daily-ticket PNG.
+"""Render the daily ticket as a wide-ruled journal-page PDF.
 
-Output: ~/Desktop/daily-ticket.png at 1200x1600, white background, Georgia
-serif. Four sections stacked top-to-bottom: header (date), weather, inbox
-(up to 5 bullets), sports (one line per team). Missing sections degrade
-gracefully — the renderer never raises on missing data.
+Output: ~/Desktop/daily-ticket.pdf at US Letter, with classic wide-ruled
+paper styling (cream background, light-blue horizontal rules, red vertical
+margin line). Sports headlines are clickable links to the source article.
+
+The PDF is one page. Every text line is snapped to a rule line so the page
+reads like a real journal entry. Missing or empty inputs degrade gracefully
+— the renderer never raises on None or [].
 """
 
 import json
 from datetime import datetime
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas as rl_canvas
 
-CANVAS_W, CANVAS_H = 1200, 1600
-MARGIN = 80
-BG = "white"
-FG = "#1a1a1a"
-MUTED = "#666666"
+PAGE_W, PAGE_H = letter  # 612, 792 pt
 
-FONT_DIR = Path("/System/Library/Fonts/Supplemental")
-FONT_REGULAR = FONT_DIR / "Georgia.ttf"
-FONT_BOLD = FONT_DIR / "Georgia Bold.ttf"
-FONT_ITALIC = FONT_DIR / "Georgia Italic.ttf"
+MARGIN = 50
+RULE_SPACING = 28
+MARGIN_LINE_X = 95
+TEXT_X = 110
+TEXT_RIGHT = PAGE_W - MARGIN
+TEXT_WIDTH = TEXT_RIGHT - TEXT_X
+BASELINE_LIFT = 4  # text baseline sits this many pts above each rule line
 
-SIZE_TITLE = 56
-SIZE_HEADER = 32
-SIZE_BODY = 22
-SIZE_FOOTER = 16
+CREAM = (0.980, 0.969, 0.941)
+RULE_BLUE = (0.710, 0.784, 0.847)
+MARGIN_RED = (0.776, 0.341, 0.314)
+INK = (0.102, 0.102, 0.102)
+INK_MUTED = (0.400, 0.400, 0.400)
+LINK_BLUE = (0.137, 0.282, 0.494)
 
-OUTPUT_PATH = Path.home() / "Desktop" / "daily-ticket.png"
+FONT_REGULAR = "Georgia"
+FONT_BOLD = "Georgia-Bold"
+FONT_ITALIC = "Georgia-Italic"
+
+SIZE_TITLE = 30
+SIZE_HEADER = 18
+SIZE_BODY = 12
+SIZE_FOOTER = 9
+
+OUTPUT_PATH = Path.home() / "Desktop" / "daily-ticket.pdf"
+
+_FONTS_REGISTERED = False
 
 
-def _font(path: Path, size: int) -> ImageFont.FreeTypeFont:
-    return ImageFont.truetype(str(path), size)
+def _register_fonts() -> None:
+    global _FONTS_REGISTERED
+    if _FONTS_REGISTERED:
+        return
+    font_dir = Path("/System/Library/Fonts/Supplemental")
+    pdfmetrics.registerFont(TTFont(FONT_REGULAR, str(font_dir / "Georgia.ttf")))
+    pdfmetrics.registerFont(TTFont(FONT_BOLD, str(font_dir / "Georgia Bold.ttf")))
+    pdfmetrics.registerFont(TTFont(FONT_ITALIC, str(font_dir / "Georgia Italic.ttf")))
+    _FONTS_REGISTERED = True
 
 
-def _rule(draw: ImageDraw.ImageDraw, y: int) -> None:
-    draw.line([(MARGIN, y), (CANVAS_W - MARGIN, y)], fill=MUTED, width=1)
-
-
-def _text_lines(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
-    """Greedy word-wrap to fit within max_width pixels."""
+def _wrap(c: rl_canvas.Canvas, text: str, font: str, size: int, max_width: float) -> list[str]:
     words = text.split()
     if not words:
         return [""]
@@ -48,7 +68,7 @@ def _text_lines(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list
     current = words[0]
     for word in words[1:]:
         candidate = f"{current} {word}"
-        if font.getlength(candidate) <= max_width:
+        if c.stringWidth(candidate, font, size) <= max_width:
             current = candidate
         else:
             lines.append(current)
@@ -57,21 +77,18 @@ def _text_lines(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list
     return lines
 
 
-def _draw_wrapped(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    font: ImageFont.FreeTypeFont,
-    x: int,
-    y: int,
-    max_width: int,
-    line_spacing: int = 8,
-    fill: str = FG,
-) -> int:
-    lines = _text_lines(text, font, max_width)
-    line_h = font.size + line_spacing
-    for i, line in enumerate(lines):
-        draw.text((x, y + i * line_h), line, font=font, fill=fill)
-    return y + len(lines) * line_h
+def _draw_background(c: rl_canvas.Canvas, rules_y: list[float]) -> None:
+    c.setFillColorRGB(*CREAM)
+    c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
+
+    c.setStrokeColorRGB(*RULE_BLUE)
+    c.setLineWidth(0.5)
+    for y in rules_y:
+        c.line(MARGIN, y, PAGE_W - MARGIN, y)
+
+    c.setStrokeColorRGB(*MARGIN_RED)
+    c.setLineWidth(1.2)
+    c.line(MARGIN_LINE_X, MARGIN, MARGIN_LINE_X, PAGE_H - MARGIN - 8)
 
 
 def _format_date(now: datetime | None = None) -> str:
@@ -82,8 +99,8 @@ def _format_date(now: datetime | None = None) -> str:
 def _format_location(geo: dict | None) -> str:
     if not geo:
         return ""
-    city = geo.get("city") or ""
-    region = geo.get("region") or ""
+    city = (geo.get("city") or "").strip()
+    region = (geo.get("region") or "").strip()
     if city and region:
         return f"{city}, {region}"
     return city or region
@@ -95,28 +112,57 @@ def _format_weather(geo: dict | None, weather: dict | None) -> str:
     loc = _format_location(geo)
     parts = [
         f"{weather['temp_now']}° now, {weather['condition']}",
-        f"H {weather['high']}° / L {weather['low']}°",
+        f"H {weather['high']}° · L {weather['low']}°",
         f"{weather['pop']}% rain",
     ]
-    body = " · ".join(parts)
-    return f"{loc} · {body}" if loc else body
+    body = "   ".join(parts)
+    return f"{loc}   ·   {body}" if loc else body
 
 
-def _format_team_line(team: dict) -> str:
+def _draw_link(
+    c: rl_canvas.Canvas,
+    text: str,
+    url: str,
+    x: float,
+    y: float,
+    font: str,
+    size: int,
+) -> None:
+    c.setFillColorRGB(*LINK_BLUE)
+    c.setFont(font, size)
+    c.drawString(x, y, text)
+    text_w = c.stringWidth(text, font, size)
+    c.setStrokeColorRGB(*LINK_BLUE)
+    c.setLineWidth(0.4)
+    c.line(x, y - 1.8, x + text_w, y - 1.8)
+    c.linkURL(
+        url,
+        (x, y - 3, x + text_w, y + size - 2),
+        relative=0,
+        thickness=0,
+    )
+
+
+def _team_line_parts(team: dict) -> tuple[str, str | None]:
+    """Return (game_text, optional_link_url). game_text is plain; the caller
+    decides whether to render the offseason headline as a separate link."""
     status = team.get("status")
     if status == "recent":
         last = team.get("last_game") or ""
         nxt = team.get("next_game")
         if nxt:
-            return f"{last} · today {nxt}"
-        return last or "—"
+            return f"{last}  ·  today {nxt}", None
+        return last or "—", None
     if status == "upcoming":
         nxt = team.get("next_game") or "—"
-        return f"today {nxt}"
+        return f"today {nxt}", None
     if status == "offseason":
         headline = team.get("headline")
-        return f"offseason · {headline}" if headline else "offseason"
-    return "—"
+        url = team.get("headline_url")
+        if headline:
+            return headline, url
+        return "offseason", None
+    return "—", None
 
 
 def render_ticket(
@@ -127,86 +173,133 @@ def render_ticket(
     output_path: Path = OUTPUT_PATH,
     now: datetime | None = None,
 ) -> Path:
-    img = Image.new("RGB", (CANVAS_W, CANVAS_H), BG)
-    draw = ImageDraw.Draw(img)
+    _register_fonts()
 
-    body_w = CANVAS_W - 2 * MARGIN
+    c = rl_canvas.Canvas(str(output_path), pagesize=letter)
+    c.setTitle("daily-ticket")
 
-    title_font = _font(FONT_BOLD, SIZE_TITLE)
-    header_font = _font(FONT_BOLD, SIZE_HEADER)
-    body_font = _font(FONT_REGULAR, SIZE_BODY)
-    body_italic = _font(FONT_ITALIC, SIZE_BODY)
-    footer_font = _font(FONT_ITALIC, SIZE_FOOTER)
+    # Pre-compute rule line positions (top to bottom).
+    rule_top = 690
+    rule_bottom = 60
+    rules_y: list[float] = []
+    y = rule_top
+    while y >= rule_bottom:
+        rules_y.append(y)
+        y -= RULE_SPACING
 
-    y = MARGIN
+    _draw_background(c, rules_y)
 
-    # Header (centered)
+    # Title (above the rules)
+    c.setFillColorRGB(*INK)
+    c.setFont(FONT_BOLD, SIZE_TITLE)
     date_str = _format_date(now)
-    date_w = title_font.getlength(date_str)
-    draw.text(((CANVAS_W - date_w) / 2, y), date_str, font=title_font, fill=FG)
-    y += SIZE_TITLE + 40
+    title_w = c.stringWidth(date_str, FONT_BOLD, SIZE_TITLE)
+    c.drawString((PAGE_W - title_w) / 2, 728, date_str)
 
-    _rule(draw, y)
-    y += 40
+    # Small flourish below title
+    c.setFillColorRGB(*INK_MUTED)
+    c.setFont(FONT_ITALIC, 10)
+    sub = "your morning brief"
+    sub_w = c.stringWidth(sub, FONT_ITALIC, 10)
+    c.drawString((PAGE_W - sub_w) / 2, 711, sub)
 
-    # Weather
+    cursor = 0
+
+    def y_at(i: int) -> float:
+        return rules_y[i] + BASELINE_LIFT
+
+    def advance(n: int = 1) -> None:
+        nonlocal cursor
+        cursor += n
+
+    # Weather line
+    c.setFillColorRGB(*INK)
+    c.setFont(FONT_REGULAR, SIZE_BODY)
     weather_text = _format_weather(geo, weather)
-    y = _draw_wrapped(draw, weather_text, body_font, MARGIN, y, body_w)
-    y += 40
+    for line in _wrap(c, weather_text, FONT_REGULAR, SIZE_BODY, TEXT_WIDTH):
+        c.drawString(TEXT_X, y_at(cursor), line)
+        advance()
+    advance()  # blank rule for breathing room
 
-    _rule(draw, y)
-    y += 40
-
-    # Inbox
-    draw.text((MARGIN, y), "Inbox", font=header_font, fill=FG)
-    y += SIZE_HEADER + 16
+    # Inbox section
+    c.setFillColorRGB(*INK)
+    c.setFont(FONT_BOLD, SIZE_HEADER)
+    c.drawString(TEXT_X, y_at(cursor), "Inbox")
+    advance()
 
     if not emails:
-        draw.text((MARGIN, y), "Nothing pressing.", font=body_italic, fill=MUTED)
-        y += SIZE_BODY + 12
+        c.setFillColorRGB(*INK_MUTED)
+        c.setFont(FONT_ITALIC, SIZE_BODY)
+        c.drawString(TEXT_X, y_at(cursor), "Nothing pressing.")
+        advance()
     else:
+        c.setFont(FONT_REGULAR, SIZE_BODY)
         for item in emails[:5]:
+            if cursor >= len(rules_y):
+                break
             sender = item.get("sender_short", "?")
             summary = item.get("summary", "")
-            bullet = f"• {sender} — {summary}"
-            y = _draw_wrapped(draw, bullet, body_font, MARGIN, y, body_w, line_spacing=6)
-            y += 8
+            bullet = f"•  {sender} — {summary}"
+            wrapped = _wrap(c, bullet, FONT_REGULAR, SIZE_BODY, TEXT_WIDTH)
+            for j, line in enumerate(wrapped):
+                if cursor >= len(rules_y):
+                    break
+                indent = 0 if j == 0 else 14
+                c.setFillColorRGB(*INK)
+                c.drawString(TEXT_X + indent, y_at(cursor), line)
+                advance()
 
-    y += 32
-    _rule(draw, y)
-    y += 40
+    advance()  # blank rule
 
-    # Sports
-    draw.text((MARGIN, y), "Sports", font=header_font, fill=FG)
-    y += SIZE_HEADER + 16
+    # Sports section
+    if cursor < len(rules_y):
+        c.setFillColorRGB(*INK)
+        c.setFont(FONT_BOLD, SIZE_HEADER)
+        c.drawString(TEXT_X, y_at(cursor), "Sports")
+        advance()
 
     if not sports:
-        draw.text((MARGIN, y), "—", font=body_italic, fill=MUTED)
-        y += SIZE_BODY + 12
+        if cursor < len(rules_y):
+            c.setFillColorRGB(*INK_MUTED)
+            c.setFont(FONT_ITALIC, SIZE_BODY)
+            c.drawString(TEXT_X, y_at(cursor), "—")
+            advance()
     else:
-        team_col_x = MARGIN
-        game_col_x = MARGIN + 220
-        game_col_w = CANVAS_W - MARGIN - game_col_x
+        team_col_w = 100
+        game_col_x = TEXT_X + team_col_w + 8
+        game_col_w = TEXT_RIGHT - game_col_x
         for team in sports:
+            if cursor >= len(rules_y):
+                break
             name = team.get("team", "?")
-            line = _format_team_line(team)
-            draw.text((team_col_x, y), name, font=body_font, fill=FG)
-            y = _draw_wrapped(
-                draw, line, body_font, game_col_x, y, game_col_w, line_spacing=6, fill=MUTED
-            )
-            y += 6
+            game_text, url = _team_line_parts(team)
 
-    # Footer (bottom-anchored)
+            c.setFillColorRGB(*INK)
+            c.setFont(FONT_BOLD, SIZE_BODY)
+            c.drawString(TEXT_X, y_at(cursor), name)
+
+            wrapped = _wrap(c, game_text, FONT_REGULAR, SIZE_BODY, game_col_w)
+            for j, line in enumerate(wrapped):
+                if cursor >= len(rules_y):
+                    break
+                y_line = y_at(cursor)
+                if url and j == 0:
+                    _draw_link(c, line, url, game_col_x, y_line, FONT_REGULAR, SIZE_BODY)
+                else:
+                    c.setFillColorRGB(*INK_MUTED)
+                    c.setFont(FONT_REGULAR, SIZE_BODY)
+                    c.drawString(game_col_x, y_line, line)
+                advance()
+
+    # Footer
+    c.setFillColorRGB(*INK_MUTED)
+    c.setFont(FONT_ITALIC, SIZE_FOOTER)
     footer = "daily-ticket"
-    footer_w = footer_font.getlength(footer)
-    draw.text(
-        ((CANVAS_W - footer_w) / 2, CANVAS_H - MARGIN),
-        footer,
-        font=footer_font,
-        fill=MUTED,
-    )
+    footer_w = c.stringWidth(footer, FONT_ITALIC, SIZE_FOOTER)
+    c.drawString((PAGE_W - footer_w) / 2, 30, footer)
 
-    img.save(output_path, "PNG")
+    c.showPage()
+    c.save()
     return output_path
 
 
@@ -248,26 +341,32 @@ def _mock_data() -> tuple[dict, dict, list[dict], list[dict]]:
             "status": "recent",
             "last_game": "W 7-6 vs PIT",
             "next_game": "@ LAD 10:10 PM",
+            "headline": None,
+            "headline_url": None,
         },
         {
             "team": "Warriors",
             "status": "offseason",
             "headline": "Draft, free agency, trade targets for eliminated teams",
+            "headline_url": "https://www.espn.com/nba/story/_/id/48432907/nba-offseason-2026-draft-free-agency-trade-targets-30-teams",
         },
         {
             "team": "Chelsea",
             "status": "offseason",
             "headline": "Premier League players out of contract this summer",
+            "headline_url": "https://www.espn.com/soccer/story/_/id/47480434/premier-league-players-contract-leave-your-team-free-summer",
         },
         {
             "team": "NY Giants",
             "status": "offseason",
             "headline": "Giants to host Cowboys in Week 1 on Sunday Night Football",
+            "headline_url": "https://www.espn.com/nfl/story/_/id/48740437/john-harbaugh-giants-host-cowboys-week-1-sunday-night-football",
         },
         {
             "team": "Cal Football",
             "status": "offseason",
             "headline": "Ranking the offseason for every Power 4 college football team",
+            "headline_url": "https://www.espn.com/college-football/story/_/id/48627615/ranking-offseason-college-football-power-4-teams-2026",
         },
     ]
     return geo, weather, emails, sports

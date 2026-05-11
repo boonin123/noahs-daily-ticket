@@ -1,6 +1,6 @@
 # daily-ticket
 
-A morning desktop "ticket" — a journal-style PNG written to `~/Desktop/daily-ticket.png` every day at 8:00 AM by `launchd`. It pulls weather (geolocated by IP), the most important Gmail of the last 24 hours (ranked by Claude), and yesterday's results / today's schedule for five sports teams, then renders it all as a clean serif card.
+A morning desktop "ticket" — a wide-ruled-journal-style PDF written to `~/Desktop/daily-ticket.pdf` every day at 8:00 AM by `launchd`. It pulls weather (geolocated by IP), the most important Gmail of the last 24 hours (ranked by Claude), and yesterday's results / today's schedule for five sports teams, then renders it all as a single-page PDF that looks like a page out of a notebook (cream stock, blue ruled lines, red margin line). Sports headlines are embedded as clickable links to the source article.
 
 ## Why
 
@@ -11,7 +11,7 @@ A personal experiment in replacing a fragmented morning routine (weather app, in
 | Concern | Choice |
 |---|---|
 | Language | Python 3.11+ |
-| Image rendering | Pillow (system Georgia font) |
+| PDF rendering | ReportLab (system Georgia font, embedded URI annotations for sports links) |
 | Gmail | Google Gmail API (Python client) — `gmail.readonly` only |
 | Email ranking | Anthropic Claude Haiku 4.5 with prompt caching |
 | Weather | Open-Meteo (no API key) |
@@ -40,7 +40,7 @@ A personal experiment in replacing a fragmented morning routine (weather app, in
             │  render.py │  Pillow → PNG
             └─────┬──────┘
                   ▼
-      ~/Desktop/daily-ticket.png
+      ~/Desktop/daily-ticket.pdf
 ```
 
 Each fetcher is a standalone module under `fetchers/`, runnable from the CLI for smoke testing. Network failures degrade gracefully — a missing section renders a placeholder rather than crashing the whole run.
@@ -56,7 +56,7 @@ daily-ticket/
 │   ├── gmail.py          # Gmail metadata pull
 │   └── email_ranker.py   # Claude Haiku 4.5 ranker
 ├── ranker_rubric.md      # Editable rubric for the email ranker
-├── render.py             # Pillow layout — writes ~/Desktop/daily-ticket.png
+├── render.py             # ReportLab layout — writes ~/Desktop/daily-ticket.pdf
 ├── main.py               # orchestrator               (Phase 5)
 ├── setup_gmail.py        # one-time OAuth bootstrap
 ├── requirements.txt
@@ -108,4 +108,5 @@ See [`PLAN.md`](PLAN.md) for the full phased plan, including the verified API su
 - **Gmail scope is read-only.** No modify, no send. The OAuth client is a Desktop app with the user as the only test user.
 - **Prompt caching** on the email-ranker's system prompt — the rubric is identical every morning, so cache hits drop the per-run cost to roughly $0.001.
 - **No retries.** If a fetcher fails, the section is omitted and execution continues. The next morning's run is the retry.
-- **Repo is private.** Rendered images contain email senders and subjects.
+- **Paywall avoidance.** Sports headline links use ESPN's free `www.espn.com` URLs; the fetcher skips articles flagged `premium` or hosted on `espnplus.com`.
+- **Repo is private.** Rendered PDFs contain email senders and subjects.

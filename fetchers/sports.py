@@ -100,12 +100,19 @@ def _summarize_upcoming(event: dict, team_id: str) -> str | None:
     return f"{home_away} {opp}{when}"
 
 
-def _fetch_headline(league: str, team_id: str) -> str | None:
+def _fetch_headline(league: str, team_id: str) -> tuple[str | None, str | None]:
+    """Return (headline, url) for the first non-paywalled article, or (None, None)."""
     data = _get_json(f"{BASE}/{league}/news", params={"team": team_id})
     if not data:
-        return None
-    articles = data.get("articles") or []
-    return articles[0].get("headline") if articles else None
+        return None, None
+    for article in data.get("articles") or []:
+        if article.get("premium"):
+            continue
+        url = ((article.get("links") or {}).get("web") or {}).get("href")
+        if url and "espnplus" in url:
+            continue
+        return article.get("headline"), url
+    return None, None
 
 
 def _fetch_team(team: str, league: str, team_id: str, extra: dict) -> dict:
@@ -113,7 +120,7 @@ def _fetch_team(team: str, league: str, team_id: str, extra: dict) -> dict:
     yesterday = today - timedelta(days=1)
     fmt = lambda d: d.strftime("%Y%m%d")  # noqa: E731
 
-    last_game = next_game = headline = None
+    last_game = next_game = headline = headline_url = None
     status = "offseason"
 
     yesterday_sb = _get_json(
@@ -133,7 +140,7 @@ def _fetch_team(team: str, league: str, team_id: str, extra: dict) -> dict:
             status = "upcoming"
 
     if not last_game and not next_game:
-        headline = _fetch_headline(league, team_id)
+        headline, headline_url = _fetch_headline(league, team_id)
         status = "offseason"
 
     return {
@@ -142,6 +149,7 @@ def _fetch_team(team: str, league: str, team_id: str, extra: dict) -> dict:
         "last_game": last_game,
         "next_game": next_game,
         "headline": headline,
+        "headline_url": headline_url,
     }
 
 
