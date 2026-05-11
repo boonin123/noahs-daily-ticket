@@ -6,6 +6,7 @@ to a missing section rather than failing the whole run.
 """
 
 import logging
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -85,6 +86,10 @@ def main() -> int:
     path = _safe(logger, "render", render_ticket, geo, weather, ranked, sports)
     if path:
         logger.info("Wrote %s at %s", path, datetime.now().strftime("%H:%M:%S"))
+        try:
+            subprocess.run(["open", str(path)], check=False, timeout=5)
+        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+            logger.warning("open failed: %s", e)
         logger.info("--- end run (ok) ---")
         return 0
 

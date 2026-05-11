@@ -399,7 +399,7 @@ def _mock_data() -> tuple[dict, dict, dict, list[dict]]:
             "headline_url": "https://www.espn.com/college-football/story/_/id/48627615/ranking-offseason-college-football-power-4-teams-2026",
         },
     ]
-    return geo, weather, emails, sports
+    return geo, weather, inbox, sports
 
 
 if __name__ == "__main__":

@@ -1,10 +1,16 @@
 # daily-ticket
 
-A morning desktop "ticket" — a wide-ruled-journal-style PDF written to `~/Desktop/daily-ticket.pdf` every day at 8:00 AM by `launchd`. It pulls weather (geolocated by IP), the most important Gmail of the last 24 hours (ranked by Claude), and yesterday's results / today's schedule for five sports teams, then renders it all as a single-page PDF that looks like a page out of a notebook (cream stock, blue ruled lines, red margin line). Sports headlines are embedded as clickable links to the source article.
+A morning desktop "ticket" — a wide-ruled-journal-style PDF written to `~/Desktop/daily-ticket.pdf` every day at 8:00 AM by `launchd`. It pulls weather (geolocated by IP), the most important Gmail of the last 24 hours (ranked by Claude), and yesterday's results / today's schedule for five sports teams, then renders it all as a single-page PDF that looks like a page out of a notebook (cream stock, blue ruled lines, red margin line). Sports headlines are embedded as clickable links to the source article. After each run the file auto-opens in Preview.
+
+## Sample
+
+![Sample rendering](docs/sample.png)
+
+Rendered from mock data so the screenshot stays clean of real inbox content. The live PDF has the same structure, with sports headlines that are actually clickable in Preview.
 
 ## Why
 
-A personal experiment in replacing a fragmented morning routine (weather app, inbox triage, sports scores across four sites) with one glanceable artifact on the desktop background. The output is a single image — no notifications, no app to open. If it's stale, that itself is the signal that something broke.
+A personal experiment in replacing a fragmented morning routine (weather app, inbox triage, sports scores across four sites) with one glanceable artifact that pops open every morning. If it's stale or doesn't open, that itself is the signal that something broke.
 
 ## Stack
 
@@ -37,7 +43,7 @@ A personal experiment in replacing a fragmented morning routine (weather app, in
                   │
                   ▼
             ┌────────────┐
-            │  render.py │  Pillow → PDF
+            │  render.py │  ReportLab → PDF
             └─────┬──────┘
                   ▼
       ~/Desktop/daily-ticket.pdf
