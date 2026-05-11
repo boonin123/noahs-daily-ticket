@@ -54,7 +54,8 @@ daily-ticket/
 │   ├── weather.py        # Open-Meteo
 │   ├── sports.py         # ESPN scoreboard + news
 │   ├── gmail.py          # Gmail metadata pull
-│   └── email_ranker.py   # Claude Haiku 4.5 ranker  (Phase 3)
+│   └── email_ranker.py   # Claude Haiku 4.5 ranker
+├── ranker_rubric.md      # Editable rubric for the email ranker
 ├── render.py             # Pillow layout              (Phase 4)
 ├── main.py               # orchestrator               (Phase 5)
 ├── setup_gmail.py        # one-time OAuth bootstrap
@@ -94,8 +95,8 @@ Add `ANTHROPIC_API_KEY=...` to `.env` for the Phase 3 ranker.
 | 0 | API surface documentation | done |
 | 1 | Scaffolding + Gmail OAuth | done |
 | 1.5 | Git + GitHub remote | done |
-| 2 | Data fetchers | in progress |
-| 3 | Claude email ranker | pending |
+| 2 | Data fetchers | done |
+| 3 | Claude email ranker | done |
 | 4 | Pillow rendering | pending |
 | 5 | Orchestration + launchd | pending |
 | 6 | End-to-end verification | pending |
