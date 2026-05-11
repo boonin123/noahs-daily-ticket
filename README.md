@@ -57,7 +57,8 @@ daily-ticket/
 │   └── email_ranker.py   # Claude Haiku 4.5 ranker
 ├── ranker_rubric.md      # Editable rubric for the email ranker
 ├── render.py             # ReportLab layout — writes ~/Desktop/daily-ticket.pdf
-├── main.py               # orchestrator               (Phase 5)
+├── main.py               # orchestrator — loaded by launchd
+├── net.boonin.daily-ticket.plist  # launchd config (8:00 AM daily)
 ├── setup_gmail.py        # one-time OAuth bootstrap
 ├── requirements.txt
 ├── PLAN.md               # phased implementation plan
@@ -88,6 +89,28 @@ Add `ANTHROPIC_API_KEY=...` to `.env` for the Phase 3 ranker.
 .venv/bin/python -m fetchers.gmail
 ```
 
+## Run the full pipeline manually
+
+```bash
+.venv/bin/python main.py
+```
+
+Refreshes `~/Desktop/daily-ticket.pdf` and appends a structured run summary
+to `logs/run.log`.
+
+## Schedule with launchd
+
+```bash
+cp net.boonin.daily-ticket.plist ~/Library/LaunchAgents/
+launchctl load -w ~/Library/LaunchAgents/net.boonin.daily-ticket.plist
+launchctl list | grep daily-ticket          # confirm loaded
+launchctl start net.boonin.daily-ticket     # force-fire to test
+```
+
+The job runs at 8:00 AM local time. macOS `launchd` catches up on the next
+wake if the Mac was asleep at 8 AM. Stdout / stderr land in `logs/stdout.log`
+and `logs/stderr.log`. To disable: `launchctl unload -w ~/Library/LaunchAgents/net.boonin.daily-ticket.plist`.
+
 ## Status
 
 | Phase | Description | State |
@@ -97,9 +120,9 @@ Add `ANTHROPIC_API_KEY=...` to `.env` for the Phase 3 ranker.
 | 1.5 | Git + GitHub remote | done |
 | 2 | Data fetchers | done |
 | 3 | Claude email ranker | done |
-| 4 | Pillow rendering | done |
-| 5 | Orchestration + launchd | pending |
-| 6 | End-to-end verification | pending |
+| 4 | PDF rendering | done |
+| 5 | Orchestration + launchd | done |
+| 6 | End-to-end verification | done |
 
 See [`PLAN.md`](PLAN.md) for the full phased plan, including the verified API surface for each external service.
 
