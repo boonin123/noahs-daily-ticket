@@ -1,0 +1,16 @@
+# Secrets — NEVER commit
+.env
+credentials.json
+token.json
+
+# Generated / local
+.venv/
+__pycache__/
+*.pyc
+logs/
+*.log
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
