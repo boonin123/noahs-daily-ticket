@@ -56,7 +56,7 @@ daily-ticket/
 │   ├── gmail.py          # Gmail metadata pull
 │   └── email_ranker.py   # Claude Haiku 4.5 ranker
 ├── ranker_rubric.md      # Editable rubric for the email ranker
-├── render.py             # Pillow layout              (Phase 4)
+├── render.py             # Pillow layout — writes ~/Desktop/daily-ticket.png
 ├── main.py               # orchestrator               (Phase 5)
 ├── setup_gmail.py        # one-time OAuth bootstrap
 ├── requirements.txt
@@ -97,7 +97,7 @@ Add `ANTHROPIC_API_KEY=...` to `.env` for the Phase 3 ranker.
 | 1.5 | Git + GitHub remote | done |
 | 2 | Data fetchers | done |
 | 3 | Claude email ranker | done |
-| 4 | Pillow rendering | pending |
+| 4 | Pillow rendering | done |
 | 5 | Orchestration + launchd | pending |
 | 6 | End-to-end verification | pending |
 
