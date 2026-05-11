@@ -21,6 +21,7 @@ MAX_RESULTS = 5
 OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
+        "unread_summary": {"type": "string"},
         "ranked": {
             "type": "array",
             "items": {
@@ -32,9 +33,9 @@ OUTPUT_SCHEMA = {
                 "required": ["sender_short", "summary"],
                 "additionalProperties": False,
             },
-        }
+        },
     },
-    "required": ["ranked"],
+    "required": ["unread_summary", "ranked"],
     "additionalProperties": False,
 }
 
@@ -56,19 +57,21 @@ def _shape_for_model(emails: list[dict]) -> list[dict]:
     ]
 
 
-def rank_emails(emails: list[dict]) -> list[dict]:
+def rank_emails(emails: list[dict]) -> dict:
+    """Return {"unread_summary": str, "ranked": list[dict]} — ranked capped at MAX_RESULTS."""
+    empty = {"unread_summary": "", "ranked": []}
     if not emails:
-        return []
+        return empty
 
     load_dotenv(ENV_PATH)
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        return []
+        return empty
 
     try:
         rubric = _load_rubric()
     except OSError:
-        return []
+        return empty
 
     client = anthropic.Anthropic(api_key=api_key)
     user_payload = json.dumps(_shape_for_model(emails), ensure_ascii=False)
@@ -87,26 +90,32 @@ def rank_emails(emails: list[dict]) -> list[dict]:
                     "role": "user",
                     "content": (
                         f"Here are the last 24 hours of email metadata as a JSON array.\n"
-                        f"Pick at most {MAX_RESULTS} items per the rubric.\n\n"
+                        f"Produce unread_summary (covering all unread emails) and up to "
+                        f"{MAX_RESULTS} ranked items per the rubric.\n\n"
                         f"{user_payload}"
                     ),
                 }
             ],
         )
     except anthropic.APIError:
-        return []
+        return empty
 
     text = next((b.text for b in response.content if b.type == "text"), "")
     if not text:
-        return []
+        return empty
 
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError:
-        return []
+        return empty
 
-    items = parsed.get("ranked", []) if isinstance(parsed, dict) else []
-    return items[:MAX_RESULTS]
+    if not isinstance(parsed, dict):
+        return empty
+
+    return {
+        "unread_summary": parsed.get("unread_summary", "") or "",
+        "ranked": (parsed.get("ranked") or [])[:MAX_RESULTS],
+    }
 
 
 def _test_fixture() -> list[dict]:
@@ -188,3 +197,4 @@ def _test_fixture() -> list[dict]:
 if __name__ == "__main__":
     result = rank_emails(_test_fixture())
     print(json.dumps(result, indent=2, ensure_ascii=False))
+    print(f"\nempty input → {rank_emails([])}")

@@ -75,10 +75,14 @@ def main() -> int:
     emails_raw = _safe(logger, "gmail", fetch_recent_emails) or []
     logger.info("gmail: %d messages in last 24h", len(emails_raw))
 
-    emails = _safe(logger, "email_ranker", rank_emails, emails_raw) or []
-    logger.info("ranker kept %d emails", len(emails))
+    ranked = _safe(logger, "email_ranker", rank_emails, emails_raw) or {"unread_summary": "", "ranked": []}
+    logger.info(
+        "ranker: %d highlighted, summary=%r",
+        len(ranked.get("ranked", [])),
+        (ranked.get("unread_summary") or "")[:80],
+    )
 
-    path = _safe(logger, "render", render_ticket, geo, weather, emails, sports)
+    path = _safe(logger, "render", render_ticket, geo, weather, ranked, sports)
     if path:
         logger.info("Wrote %s at %s", path, datetime.now().strftime("%H:%M:%S"))
         logger.info("--- end run (ok) ---")

@@ -154,7 +154,10 @@ def _fetch_team(team: str, league: str, team_id: str, extra: dict) -> dict:
 
 
 def fetch_all_teams() -> list[dict]:
-    return [_fetch_team(t, l, tid, extra) for (t, l, tid, extra) in TEAMS]
+    teams = [_fetch_team(t, l, tid, extra) for (t, l, tid, extra) in TEAMS]
+    # Today's game first, then yesterday's result, then offseason.
+    teams.sort(key=lambda t: (t.get("next_game") is None, t.get("status") != "recent"))
+    return teams
 
 
 if __name__ == "__main__":

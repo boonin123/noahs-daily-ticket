@@ -168,11 +168,21 @@ def _team_line_parts(team: dict) -> tuple[str, str | None]:
 def render_ticket(
     geo: dict | None,
     weather: dict | None,
-    emails: list[dict] | None,
+    inbox: dict | list | None,
     sports: list[dict] | None,
     output_path: Path = OUTPUT_PATH,
     now: datetime | None = None,
 ) -> Path:
+    # Accept either the new dict shape or the legacy list shape for `inbox`.
+    if isinstance(inbox, list):
+        unread_summary = ""
+        emails: list[dict] = inbox
+    elif isinstance(inbox, dict):
+        unread_summary = inbox.get("unread_summary", "") or ""
+        emails = inbox.get("ranked", []) or []
+    else:
+        unread_summary = ""
+        emails = []
     _register_fonts()
 
     c = rl_canvas.Canvas(str(output_path), pagesize=letter)
@@ -227,11 +237,23 @@ def render_ticket(
     c.drawString(TEXT_X, y_at(cursor), "Inbox")
     advance()
 
-    if not emails:
+    # Optional unread-inbox summary line (italic, muted).
+    if unread_summary and cursor < len(rules_y):
         c.setFillColorRGB(*INK_MUTED)
         c.setFont(FONT_ITALIC, SIZE_BODY)
-        c.drawString(TEXT_X, y_at(cursor), "Nothing pressing.")
-        advance()
+        for line in _wrap(c, unread_summary, FONT_ITALIC, SIZE_BODY, TEXT_WIDTH):
+            if cursor >= len(rules_y):
+                break
+            c.drawString(TEXT_X, y_at(cursor), line)
+            advance()
+        advance()  # blank rule between summary and bullets
+
+    if not emails:
+        if cursor < len(rules_y):
+            c.setFillColorRGB(*INK_MUTED)
+            c.setFont(FONT_ITALIC, SIZE_BODY)
+            c.drawString(TEXT_X, y_at(cursor), "Nothing pressing.")
+            advance()
     else:
         c.setFont(FONT_REGULAR, SIZE_BODY)
         for item in emails[:5]:
@@ -279,11 +301,11 @@ def render_ticket(
             c.drawString(TEXT_X, y_at(cursor), name)
 
             wrapped = _wrap(c, game_text, FONT_REGULAR, SIZE_BODY, game_col_w)
-            for j, line in enumerate(wrapped):
+            for line in wrapped:
                 if cursor >= len(rules_y):
                     break
                 y_line = y_at(cursor)
-                if url and j == 0:
+                if url:
                     _draw_link(c, line, url, game_col_x, y_line, FONT_REGULAR, SIZE_BODY)
                 else:
                     c.setFillColorRGB(*INK_MUTED)
@@ -303,7 +325,7 @@ def render_ticket(
     return output_path
 
 
-def _mock_data() -> tuple[dict, dict, list[dict], list[dict]]:
+def _mock_data() -> tuple[dict, dict, dict, list[dict]]:
     geo = {"city": "Boston", "region": "Massachusetts", "country": "United States"}
     weather = {
         "temp_now": 58,
@@ -313,28 +335,36 @@ def _mock_data() -> tuple[dict, dict, list[dict], list[dict]]:
         "low": 52,
         "pop": 10,
     }
-    emails = [
-        {
-            "sender_short": "Anthropic",
-            "summary": "technical screen interview confirmed for Tuesday May 13 at 2pm PT",
-        },
-        {
-            "sender_short": "Sarah Kim",
-            "summary": "wants to discuss senior engineer role at Stripe — available Wed or Thu afternoon",
-        },
-        {
-            "sender_short": "LinkedIn",
-            "summary": "5 new Staff Engineer roles in Bay Area — OpenAI, Figma, Notion, Linear, Vercel",
-        },
-        {
-            "sender_short": "Mom",
-            "summary": "checking if you're coming up this weekend; dad needs to know about groceries",
-        },
-        {
-            "sender_short": "Dave",
-            "summary": "asking if you're free next Friday to grab a beer",
-        },
-    ]
+    inbox = {
+        "unread_summary": (
+            "28 unread: mostly newsletters (Athletic, Stratechery, TLDR) and recruiter "
+            "blasts. Five stand out — an Anthropic interview confirmation, a Stripe "
+            "outreach from Sarah Kim, a LinkedIn job-alert digest, and two personal "
+            "emails from Mom and Dave."
+        ),
+        "ranked": [
+            {
+                "sender_short": "Anthropic",
+                "summary": "technical screen interview confirmed for Tuesday May 13 at 2pm PT",
+            },
+            {
+                "sender_short": "Sarah Kim",
+                "summary": "wants to discuss senior engineer role at Stripe — available Wed or Thu afternoon",
+            },
+            {
+                "sender_short": "LinkedIn",
+                "summary": "5 new Staff Engineer roles in Bay Area — OpenAI, Figma, Notion, Linear, Vercel",
+            },
+            {
+                "sender_short": "Mom",
+                "summary": "checking if you're coming up this weekend; dad needs to know about groceries",
+            },
+            {
+                "sender_short": "Dave",
+                "summary": "asking if you're free next Friday to grab a beer",
+            },
+        ],
+    }
     sports = [
         {
             "team": "SF Giants",
@@ -373,7 +403,7 @@ def _mock_data() -> tuple[dict, dict, list[dict], list[dict]]:
 
 
 if __name__ == "__main__":
-    geo, weather, emails, sports = _mock_data()
-    path = render_ticket(geo, weather, emails, sports)
+    geo, weather, inbox, sports = _mock_data()
+    path = render_ticket(geo, weather, inbox, sports)
     print(f"Wrote {path}")
     print(json.dumps({"size_bytes": path.stat().st_size}, indent=2))
