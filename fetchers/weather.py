@@ -1,10 +1,14 @@
 """Current + daily weather via Open-Meteo (no API key)."""
 
 import json
+import logging
+import time
 
 import requests
 
 ENDPOINT = "https://api.open-meteo.com/v1/forecast"
+
+logger = logging.getLogger("daily-ticket")
 
 
 def _condition(code: int) -> str:
@@ -32,11 +36,20 @@ def fetch(lat: float, lon: float) -> dict | None:
         "temperature_unit": "fahrenheit",
         "timezone": "auto",
     }
-    try:
-        r = requests.get(ENDPOINT, params=params, timeout=5)
-        r.raise_for_status()
-        data = r.json()
-    except (requests.RequestException, ValueError):
+    data = None
+    last_err: Exception | None = None
+    for attempt in range(2):
+        try:
+            r = requests.get(ENDPOINT, params=params, timeout=10)
+            r.raise_for_status()
+            data = r.json()
+            break
+        except (requests.RequestException, ValueError) as e:
+            last_err = e
+            if attempt == 0:
+                time.sleep(1.0)
+    if data is None:
+        logger.warning("weather fetch failed: %s", last_err)
         return None
 
     try:

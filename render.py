@@ -231,6 +231,24 @@ def render_ticket(
         advance()
     advance()  # blank rule for breathing room
 
+    # Reserve rule slots for the sports section so a long inbox never crowds
+    # it out. Compute the exact number of rules sports will consume up front,
+    # then cap the inbox to whatever rules remain after that reservation.
+    team_col_w_calc = 100
+    game_col_x_calc = TEXT_X + team_col_w_calc + 8
+    game_col_w_calc = TEXT_RIGHT - game_col_x_calc
+    sports_lines = 1  # header
+    if not sports:
+        sports_lines += 1
+    else:
+        for team in sports:
+            _, _ = team.get("team"), None
+            game_text_calc, _ = _team_line_parts(team)
+            wrapped_calc = _wrap(c, game_text_calc, FONT_REGULAR, SIZE_BODY, game_col_w_calc)
+            sports_lines += max(1, len(wrapped_calc))
+
+    inbox_budget_end = len(rules_y) - sports_lines - 1  # -1 for blank rule before sports
+
     # Inbox section
     c.setFillColorRGB(*INK)
     c.setFont(FONT_BOLD, SIZE_HEADER)
@@ -238,18 +256,20 @@ def render_ticket(
     advance()
 
     # Optional unread-inbox summary line (italic, muted).
-    if unread_summary and cursor < len(rules_y):
+    if unread_summary and cursor < inbox_budget_end:
         c.setFillColorRGB(*INK_MUTED)
         c.setFont(FONT_ITALIC, SIZE_BODY)
-        for line in _wrap(c, unread_summary, FONT_ITALIC, SIZE_BODY, TEXT_WIDTH):
-            if cursor >= len(rules_y):
+        summary_lines = _wrap(c, unread_summary, FONT_ITALIC, SIZE_BODY, TEXT_WIDTH)
+        for line in summary_lines:
+            if cursor >= inbox_budget_end:
                 break
             c.drawString(TEXT_X, y_at(cursor), line)
             advance()
-        advance()  # blank rule between summary and bullets
+        if cursor < inbox_budget_end:
+            advance()  # blank rule between summary and bullets
 
     if not emails:
-        if cursor < len(rules_y):
+        if cursor < inbox_budget_end:
             c.setFillColorRGB(*INK_MUTED)
             c.setFont(FONT_ITALIC, SIZE_BODY)
             c.drawString(TEXT_X, y_at(cursor), "Nothing pressing.")
@@ -257,21 +277,21 @@ def render_ticket(
     else:
         c.setFont(FONT_REGULAR, SIZE_BODY)
         for item in emails[:5]:
-            if cursor >= len(rules_y):
+            if cursor >= inbox_budget_end:
                 break
             sender = item.get("sender_short", "?")
             summary = item.get("summary", "")
             bullet = f"•  {sender} — {summary}"
             wrapped = _wrap(c, bullet, FONT_REGULAR, SIZE_BODY, TEXT_WIDTH)
             for j, line in enumerate(wrapped):
-                if cursor >= len(rules_y):
+                if cursor >= inbox_budget_end:
                     break
                 indent = 0 if j == 0 else 14
                 c.setFillColorRGB(*INK)
                 c.drawString(TEXT_X + indent, y_at(cursor), line)
                 advance()
 
-    advance()  # blank rule
+    advance()  # one blank rule between inbox and sports
 
     # Sports section
     if cursor < len(rules_y):
