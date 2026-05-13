@@ -24,6 +24,11 @@ from render import render_ticket
 PROJECT_DIR = Path.home() / "Desktop" / "projects" / "daily-ticket"
 LOG_DIR = PROJECT_DIR / "logs"
 LOG_PATH = LOG_DIR / "run.log"
+STAMP_DIR = LOG_DIR / "stamps"
+
+
+def _today_stamp() -> Path:
+    return STAMP_DIR / f"{datetime.now().strftime('%Y-%m-%d')}.stamp"
 
 
 def _setup_logging() -> logging.Logger:
@@ -53,6 +58,11 @@ def _safe(logger: logging.Logger, name: str, fn: Callable[..., Any], *args, **kw
 def main() -> int:
     load_dotenv(PROJECT_DIR / ".env")
     logger = _setup_logging()
+    STAMP_DIR.mkdir(exist_ok=True)
+    stamp = _today_stamp()
+    if stamp.exists():
+        logger.info("already ran today (%s); skipping", stamp.name)
+        return 0
     logger.info("--- starting daily-ticket run ---")
 
     geo = _safe(logger, "geo", fetch_geo)
@@ -90,6 +100,7 @@ def main() -> int:
             subprocess.run(["open", str(path)], check=False, timeout=5)
         except (FileNotFoundError, subprocess.TimeoutExpired) as e:
             logger.warning("open failed: %s", e)
+        stamp.touch()
         logger.info("--- end run (ok) ---")
         return 0
 
