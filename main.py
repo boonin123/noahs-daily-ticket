@@ -6,11 +6,25 @@ to a missing section rather than failing the whole run.
 """
 
 import logging
+import socket
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
+
+NETWORK_CHECK_HOSTS = [("1.1.1.1", 53), ("8.8.8.8", 53)]
+NETWORK_CHECK_TIMEOUT = 3.0
+
+
+def _has_network() -> bool:
+    for host, port in NETWORK_CHECK_HOSTS:
+        try:
+            with socket.create_connection((host, port), timeout=NETWORK_CHECK_TIMEOUT):
+                return True
+        except OSError:
+            continue
+    return False
 
 from dotenv import load_dotenv
 
@@ -63,6 +77,9 @@ def main() -> int:
     if stamp.exists():
         logger.info("already ran today (%s); skipping", stamp.name)
         return 0
+    if not _has_network():
+        logger.warning("no network connectivity; aborting without stamp so next retry can pick up")
+        return 75
     logger.info("--- starting daily-ticket run ---")
 
     geo = _safe(logger, "geo", fetch_geo)
