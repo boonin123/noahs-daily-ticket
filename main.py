@@ -12,17 +12,20 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
+from urllib.request import Request, urlopen
 
-NETWORK_CHECK_HOSTS = [("1.1.1.1", 53), ("8.8.8.8", 53)]
-NETWORK_CHECK_TIMEOUT = 3.0
+NETWORK_CHECK_URLS = ["https://api.open-meteo.com/", "https://www.google.com/"]
+NETWORK_CHECK_TIMEOUT = 5.0
 
 
 def _has_network() -> bool:
-    for host, port in NETWORK_CHECK_HOSTS:
+    for url in NETWORK_CHECK_URLS:
         try:
-            with socket.create_connection((host, port), timeout=NETWORK_CHECK_TIMEOUT):
-                return True
-        except OSError:
+            req = Request(url, method="HEAD")
+            with urlopen(req, timeout=NETWORK_CHECK_TIMEOUT) as resp:
+                if resp.status < 500:
+                    return True
+        except Exception:
             continue
     return False
 
