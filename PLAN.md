@@ -349,8 +349,12 @@ Helper functions to write inline (don't over-engineer):
        <key>Hour</key>   <integer>8</integer>
        <key>Minute</key> <integer>0</integer>
      </dict>
-     <key>StandardOutPath</key>  <string>/Users/noahboonin/Desktop/projects/daily-ticket/logs/stdout.log</string>
-     <key>StandardErrorPath</key><string>/Users/noahboonin/Desktop/projects/daily-ticket/logs/stderr.log</string>
+     <key>StandardOutPath</key>  <string>/Users/noahboonin/Library/Logs/daily-ticket/stdout.log</string>
+     <key>StandardErrorPath</key><string>/Users/noahboonin/Library/Logs/daily-ticket/stderr.log</string>
+     <!-- Keep stdio off ~/Desktop: macOS TCC blocks launchd/xpcproxy from
+          opening files in the Desktop folder, which causes EX_CONFIG (78)
+          and the job never spawns. -->
+
    </dict>
    </plist>
    ```
@@ -366,7 +370,7 @@ Helper functions to write inline (don't over-engineer):
 ### Verification checklist
 - [ ] `~/Desktop/projects/daily-ticket/.venv/bin/python ~/Desktop/projects/daily-ticket/main.py` runs end-to-end with no traceback; writes a fresh image to the Desktop.
 - [ ] `launchctl list | grep daily-ticket` shows the job loaded.
-- [ ] `launchctl start net.boonin.daily-ticket` triggers a run and updates the Desktop image; check `logs/stdout.log` and `logs/stderr.log` for output.
+- [ ] `launchctl start net.boonin.daily-ticket` triggers a run and updates the Desktop image; check `~/Library/Logs/daily-ticket/stdout.log` and `stderr.log` for output.
 - [ ] After a real 8 AM trigger (next morning), the image is fresh — check its mtime.
 
 ### Anti-pattern guards

@@ -64,9 +64,9 @@
     <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
   </array>
   <key>StandardOutPath</key>
-  <string>/Users/noahboonin/Desktop/projects/daily-ticket/logs/stdout.log</string>
+  <string>/Users/noahboonin/Library/Logs/daily-ticket/stdout.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/noahboonin/Desktop/projects/daily-ticket/logs/stderr.log</string>
+  <string>/Users/noahboonin/Library/Logs/daily-ticket/stderr.log</string>
   <key>RunAtLoad</key>
   <false/>
 </dict>

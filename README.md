@@ -114,8 +114,11 @@ launchctl start net.boonin.daily-ticket     # force-fire to test
 ```
 
 The job runs at 8:00 AM local time. macOS `launchd` catches up on the next
-wake if the Mac was asleep at 8 AM. Stdout / stderr land in `logs/stdout.log`
-and `logs/stderr.log`. To disable: `launchctl unload -w ~/Library/LaunchAgents/net.boonin.daily-ticket.plist`.
+wake if the Mac was asleep at 8 AM. Stdout / stderr land in
+`~/Library/Logs/daily-ticket/stdout.log` and `stderr.log` (kept off `~/Desktop`
+so launchd's xpcproxy isn't blocked by macOS TCC on the Desktop folder).
+The app's own structured log stays at `logs/run.log` inside the repo.
+To disable: `launchctl unload -w ~/Library/LaunchAgents/net.boonin.daily-ticket.plist`.
 
 ## Status
 
