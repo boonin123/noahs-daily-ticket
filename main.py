@@ -7,6 +7,7 @@ to a missing section rather than failing the whole run.
 
 import logging
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -166,12 +167,10 @@ def _deploy_to_vercel(logger: logging.Logger) -> str | None:
     except subprocess.TimeoutExpired:
         logger.error("vercel deploy timed out")
         return None
-    # The deployment URL is the last non-empty line of stdout.
-    for line in reversed((result.stdout or "").splitlines()):
-        line = line.strip()
-        if line.startswith("https://"):
-            return line
-    return None
+    combined = (result.stdout or "") + "\n" + (result.stderr or "")
+    # Prefer the stable production alias over the per-deployment URL when present.
+    alias = re.search(r"https://[a-z0-9.-]+\.vercel\.app", combined)
+    return alias.group(0) if alias else None
 
 
 if __name__ == "__main__":
