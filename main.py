@@ -6,6 +6,7 @@ to a missing section rather than failing the whole run.
 """
 
 import logging
+import os
 import socket
 import subprocess
 import sys
@@ -36,12 +37,13 @@ from fetchers.geo import fetch as fetch_geo
 from fetchers.gmail import fetch_recent_emails
 from fetchers.sports import fetch_all_teams
 from fetchers.weather import fetch as fetch_weather
-from render import render_ticket
+from render_html import SITE_DIR, render_ticket
 
 PROJECT_DIR = Path.home() / "Desktop" / "projects" / "daily-ticket"
 LOG_DIR = PROJECT_DIR / "logs"
 LOG_PATH = LOG_DIR / "run.log"
 STAMP_DIR = LOG_DIR / "stamps"
+VERCEL_BIN = "/usr/local/bin/vercel"
 
 
 def _today_stamp() -> Path:
@@ -114,19 +116,62 @@ def main() -> int:
     )
 
     path = _safe(logger, "render", render_ticket, geo, weather, ranked, sports)
-    if path:
-        logger.info("Wrote %s at %s", path, datetime.now().strftime("%H:%M:%S"))
+    if not path:
+        logger.error("render returned no path; nothing written")
+        logger.info("--- end run (failed) ---")
+        return 1
+    logger.info("Wrote %s at %s", path, datetime.now().strftime("%H:%M:%S"))
+
+    url = _safe(logger, "vercel_deploy", _deploy_to_vercel, logger)
+    if url:
+        logger.info("deployed: %s", url)
         try:
-            subprocess.run(["open", str(path)], check=False, timeout=5)
+            subprocess.run(["open", url], check=False, timeout=5)
         except (FileNotFoundError, subprocess.TimeoutExpired) as e:
             logger.warning("open failed: %s", e)
-        stamp.touch()
-        logger.info("--- end run (ok) ---")
-        return 0
+    else:
+        logger.warning("vercel deploy skipped or failed; not opening")
 
-    logger.error("render returned no path; nothing written")
-    logger.info("--- end run (failed) ---")
-    return 1
+    stamp.touch()
+    logger.info("--- end run (ok) ---")
+    return 0
+
+
+def _deploy_to_vercel(logger: logging.Logger) -> str | None:
+    token = os.environ.get("VERCEL_TOKEN")
+    if not token:
+        logger.warning("VERCEL_TOKEN not set; skipping deploy")
+        return None
+    if not Path(VERCEL_BIN).exists():
+        logger.warning("vercel CLI not found at %s; skipping deploy", VERCEL_BIN)
+        return None
+    if not (SITE_DIR / ".vercel" / "project.json").exists():
+        logger.warning(
+            "site is not linked to a Vercel project (no %s); run `vercel link` in %s",
+            SITE_DIR / ".vercel" / "project.json", SITE_DIR,
+        )
+        return None
+    try:
+        result = subprocess.run(
+            [VERCEL_BIN, "deploy", "--prod", "--yes", "--token", token],
+            cwd=str(SITE_DIR),
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        logger.error("vercel deploy failed (exit %s): %s", e.returncode, (e.stderr or "").strip())
+        return None
+    except subprocess.TimeoutExpired:
+        logger.error("vercel deploy timed out")
+        return None
+    # The deployment URL is the last non-empty line of stdout.
+    for line in reversed((result.stdout or "").splitlines()):
+        line = line.strip()
+        if line.startswith("https://"):
+            return line
+    return None
 
 
 if __name__ == "__main__":

@@ -1,12 +1,12 @@
 # daily-ticket
 
-A morning desktop "ticket" — a wide-ruled-journal-style PDF written to `~/Desktop/daily-ticket.pdf` every day at 8:00 AM by `launchd`. It pulls weather (geolocated by IP), the most important Gmail of the last 24 hours (ranked by Claude), and yesterday's results / today's schedule for five sports teams, then renders it all as a single-page PDF that looks like a page out of a notebook (cream stock, blue ruled lines, red margin line). Sports headlines are embedded as clickable links to the source article. After each run the file auto-opens in Preview.
+A morning desktop "ticket" — a wide-ruled-journal-style HTML page deployed to Vercel every day at 8:00 AM by `launchd`. It pulls weather (geolocated by IP), the most important Gmail of the last 24 hours (ranked by Claude), and yesterday's results / today's schedule for five sports teams, then renders it all as a single self-contained HTML page that looks like a page out of a notebook (cream stock, ruled lines). Sports headlines are clickable. After each run the deployed URL auto-opens in the default browser.
 
 ## Sample
 
 ![Sample rendering](docs/sample.png)
 
-Rendered from mock data so the screenshot stays clean of real inbox content. The live PDF has the same structure, with sports headlines that are actually clickable in Preview.
+Rendered from mock data so the screenshot stays clean of real inbox content. The live page has the same structure, with sports headlines that are actually clickable in the browser.
 
 ## Why
 
@@ -17,7 +17,8 @@ A personal experiment in replacing a fragmented morning routine (weather app, in
 | Concern | Choice |
 |---|---|
 | Language | Python 3.11+ |
-| PDF rendering | ReportLab (system Georgia font, embedded URI annotations for sports links) |
+| Rendering | Plain HTML/CSS, single self-contained file (Georgia + inline CSS, no JS) |
+| Hosting | Vercel (`vercel deploy --prod` after each run; SSO-protected) |
 | Gmail | Google Gmail API (Python client) — `gmail.readonly` only |
 | Email ranking | Anthropic Claude Haiku 4.5 with prompt caching |
 | Weather | Open-Meteo (no API key) |
@@ -42,11 +43,15 @@ A personal experiment in replacing a fragmented morning routine (weather app, in
                                           (Claude)
                   │
                   ▼
-            ┌────────────┐
-            │  render.py │  ReportLab → PDF
-            └─────┬──────┘
+            ┌──────────────┐
+            │ render_html  │  → site/index.html
+            └─────┬────────┘
                   ▼
-      ~/Desktop/daily-ticket.pdf
+            ┌──────────────┐
+            │ vercel deploy│  --prod (SSO-protected)
+            └─────┬────────┘
+                  ▼
+           open <deployed URL>
 ```
 
 Each fetcher is a standalone module under `fetchers/`, runnable from the CLI for smoke testing. Network failures degrade gracefully — a missing section renders a placeholder rather than crashing the whole run.
@@ -62,7 +67,8 @@ daily-ticket/
 │   ├── gmail.py          # Gmail metadata pull
 │   └── email_ranker.py   # Claude Haiku 4.5 ranker
 ├── ranker_rubric.md      # Editable rubric for the email ranker
-├── render.py             # ReportLab layout — writes ~/Desktop/daily-ticket.pdf
+├── render_html.py        # HTML renderer — writes site/index.html
+├── site/                 # Vercel project root (deployed dir)
 ├── main.py               # orchestrator — loaded by launchd
 ├── net.boonin.daily-ticket.plist  # launchd config (8:00 AM daily)
 ├── setup_gmail.py        # one-time OAuth bootstrap
@@ -86,6 +92,21 @@ python3 -m venv .venv
 
 Add `ANTHROPIC_API_KEY=...` to `.env` for the Phase 3 ranker.
 
+### One-time Vercel setup
+
+```bash
+# 1. Install the CLI globally (already done on this machine):
+#    sudo npm i -g vercel
+# 2. Log in once (browser flow):
+vercel login
+# 3. Link the site/ directory to a new Vercel project:
+cd site && vercel link --yes && cd ..
+# 4. Enable Deployment Protection → Vercel Authentication (SSO) in the
+#    project's dashboard so only your Vercel account can view the page.
+# 5. Create a personal token at https://vercel.com/account/tokens and add
+#    VERCEL_TOKEN=... to .env. main.py reads this to deploy non-interactively.
+```
+
 ## Smoke-test each fetcher
 
 ```bash
@@ -101,8 +122,10 @@ Add `ANTHROPIC_API_KEY=...` to `.env` for the Phase 3 ranker.
 .venv/bin/python main.py
 ```
 
-Refreshes `~/Desktop/daily-ticket.pdf` and appends a structured run summary
-to `logs/run.log`.
+Writes `site/index.html`, runs `vercel deploy --prod`, opens the deployed
+URL in your browser, and appends a structured run summary to `logs/run.log`.
+If `VERCEL_TOKEN` is unset or `site/.vercel/project.json` is missing, the
+deploy step is skipped (HTML is still written locally).
 
 ## Schedule with launchd
 

@@ -10,6 +10,10 @@ __pycache__/
 logs/
 *.log
 
+# Vercel
+site/index.html
+site/.vercel/
+
 # OS / editor
 .DS_Store
 .vscode/
